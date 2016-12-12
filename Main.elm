@@ -70,7 +70,27 @@ Returns `Just String` if there was a problem. The corresponding
 -}
 validString : String -> Maybe String
 validString x =
-    Nothing
+    let
+        setDiff : Set.Set Char  -- Set of Chars in input string that aren't in valid set
+        setDiff =
+            Set.diff (Set.fromList <| String.toList (String.toUpper x)) validChars
+    in
+        if Set.isEmpty setDiff then  -- If empty, input contains no illegal chars
+            Nothing
+        else
+            let
+                badChars : String  -- List of Strings converted from Set of Chars
+                badChars =
+                    String.join ", " (List.map String.fromChar (Set.toList setDiff))
+
+                badChar : String  -- For case of only one invalid Char
+                badChar =
+                    String.fromList (Set.toList setDiff)
+            in
+                if List.length badChars > 1 then
+                    Just ("String contains illegal characters: " ++ badChars)
+                else  -- Only one bad character
+                    Just ("String contains an illegal character: " ++ badChar)
 
 
 {-| Attempt to translate a `String` to Meowth speak.
@@ -82,7 +102,18 @@ Returns `Err String` when the input string is invalid.
 -}
 meowthify : String -> Result String String
 meowthify s =
-    Ok s
+    case (validString s) of
+        Just x -> Err x
+        Nothing -> Ok (s
+                       |> String.toUpper  -- Rule 1: Meowth likes to yell
+                       |> String.words  -- Split input to parse
+                       |> List.map (\x -> if x == "JERK" then "JOIK" else x)
+                       |> List.map (\x -> if x == "YOU" then "YOUS" else x)
+                       |> List.map (\x -> if (String.endsWith "ING" x) then String.append (String.dropRight 1 x) "'" else x)
+                       |> List.map (\x -> if (String.startsWith "TH" x) then String.cons 'D' (String.dropLeft 2 x) else x)
+                       |> List.map (\x -> if x == "YOUR" || x == "YOURE" then "YER" else x)
+                       |> String.join " "  -- Translated string
+                       )
 
 
 {-| Insert the (uncertain)phrase "YANNO WHAT I MEAN" into a `String`
@@ -101,13 +132,34 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         NewContent content ->
-            ( model, Cmd.none )
+            ( { model  -- Update the current state
+                | translated =
+                      case (meowthify content) of
+                          Ok x ->
+                              x  -- No error, output tranlated input
+
+                          Err y ->
+                              "" -- Error found, but it goes to errorMsg
+                , errorMsg =
+                      case (meowthify content) of
+                          Ok x ->
+                              ""  -- No problems here
+
+                          Err y ->
+                              y  -- Something is wrong
+              }
+            , Cmd.none
+            )
 
         AddUncertainty ->
-            ( model, Cmd.none )
+            ( model, Random.generate RandomIndex (Random.int 0 99))
 
         RandomIndex i ->
-            ( model, Cmd.none )
+            ( { model
+                | translated = addUncertainty i translated
+                , errorMsg = ""
+              }
+            , Cmd.none )
 
 
 
