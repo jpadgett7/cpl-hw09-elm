@@ -71,26 +71,80 @@ Returns `Just String` if there was a problem. The corresponding
 validString : String -> Maybe String
 validString x =
     let
-        setDiff : Set.Set Char  -- Set of Chars in input string that aren't in valid set
+        setDiff : Set.Set Char  -- Set of Chars in input not in valid set
         setDiff =
-            Set.diff (Set.fromList <| String.toList (String.toUpper x)) validChars
+            Set.diff (Set.fromList <| String.toList <| String.toUpper x) validChars
+
+        badChars : String  -- Comma-separated String from Set of Chars
+        badChars =
+            String.join ", " <| List.map String.fromChar <| Set.toList setDiff
     in
-        if Set.isEmpty setDiff then  -- If empty, input contains no illegal chars
+        if Set.isEmpty setDiff then  -- If empty, input has no illegal chars
             Nothing
         else
-            let
-                badChars : String  -- List of Strings converted from Set of Chars
-                badChars =
-                    String.join ", " (List.map String.fromChar (Set.toList setDiff))
+            if String.length badChars > 1 then
+                Just ("String contains illegal characters: " ++ badChars)
+            else  -- Only one bad character
+                Just ("String contains an illegal character: " ++ badChars)
 
-                badChar : String  -- For case of only one invalid Char
-                badChar =
-                    String.fromList (Set.toList setDiff)
-            in
-                if List.length badChars > 1 then
-                    Just ("String contains illegal characters: " ++ badChars)
-                else  -- Only one bad character
-                    Just ("String contains an illegal character: " ++ badChar)
+
+{-| Translates a capitalized string "JERK" to Meowth speak
+
+Returns an unaltered string otherwise
+-}
+toJoik : String -> String
+toJoik x =
+    if x == "JERK" then
+        "JOIK"
+    else
+        x
+
+
+{-| Translates a capitalized string "YOU" to Meowth speak
+
+Returns an unaltered string otherwise
+-}
+toYous : String -> String
+toYous x =
+    if x == "YOU" then
+        "YOUS"
+    else
+        x
+
+
+{-| Translates a capitalized string ending in "ING" to Meowth speak
+
+Returns an unaltered string otherwise
+-}
+toIn : String -> String
+toIn x =
+    if (String.endsWith "ING" x) then
+        String.append (String.dropRight 1 x) "'"
+    else
+        x
+
+
+{-| Translates a capitalized string starting with "TH" to Meowth speak
+
+Returns an unaltered string otherwise
+-}
+toDe : String -> String
+toDe x =
+    if (String.startsWith "TH" x) then
+        String.cons 'D' <| String.dropLeft 2 x
+    else
+        x
+
+{-| Translates a capitalized string "YOUR" or "YOURE" to Meowth speak
+
+Returns an unaltered string otherwise
+-}
+toYer : String -> String
+toYer x =
+    if x == "YOUR" || x == "YOURE" then
+        "YER"
+    else
+        x
 
 
 {-| Attempt to translate a `String` to Meowth speak.
@@ -102,18 +156,21 @@ Returns `Err String` when the input string is invalid.
 -}
 meowthify : String -> Result String String
 meowthify s =
-    case (validString s) of
-        Just x -> Err x
-        Nothing -> Ok (s
-                       |> String.toUpper  -- Rule 1: Meowth likes to yell
-                       |> String.words  -- Split input to parse
-                       |> List.map (\x -> if x == "JERK" then "JOIK" else x)
-                       |> List.map (\x -> if x == "YOU" then "YOUS" else x)
-                       |> List.map (\x -> if (String.endsWith "ING" x) then String.append (String.dropRight 1 x) "'" else x)
-                       |> List.map (\x -> if (String.startsWith "TH" x) then String.cons 'D' (String.dropLeft 2 x) else x)
-                       |> List.map (\x -> if x == "YOUR" || x == "YOURE" then "YER" else x)
-                       |> String.join " "  -- Translated string
-                       )
+    let
+        newStr : String
+        newStr = s
+                 |> String.toUpper  -- Rule 1: Meowth likes to yell
+                 |> String.words  -- Split input to parse
+                 |> List.map (\x -> toJoik x)  -- Rule 2
+                 |> List.map (\x -> toYous x)  -- Rule 3
+                 |> List.map (\x -> toIn x)  -- Rule 4
+                 |> List.map (\x -> toDe x)  -- Rule 5
+                 |> List.map (\x -> toYer x)  -- Rule 6
+                 |> String.join " "  -- Translated string
+    in
+        case (validString s) of
+            Just x -> Err x
+            Nothing -> Ok newStr
 
 
 {-| Insert the (uncertain)phrase "YANNO WHAT I MEAN" into a `String`
@@ -125,7 +182,26 @@ is inserted at the beginning or the end of the `String`.
 -}
 addUncertainty : Int -> String -> String
 addUncertainty i string =
-    String.join " " <| List.concat [ [ "YANNO WHAT I MEAN" ], [ string ] ]
+    let
+        uncertainty : List String
+        uncertainty =
+            [ "YANNO WHAT I MEAN" ]
+
+        (leftSide, rightSide) = string  -- Breaks up string into two parts
+                                |> String.words  -- Break into words
+                                |> List.indexedMap (,)  -- List of tuples
+                                |> List.partition (\(index, str) -> index < i)
+
+        leftString : List String  -- Words left of uncertainty string
+        leftString =
+            List.map (\(index, str) -> str) leftSide
+
+        rightString : List String  -- Words right of uncertainty string
+        rightString =
+            List.map (\(index, str) -> str) rightSide
+    in
+        String.join " "
+            <| List.concat [ leftString, uncertainty, rightString ]
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -152,11 +228,16 @@ update msg model =
             )
 
         AddUncertainty ->
-            ( model, Random.generate RandomIndex (Random.int 0 99))
+            let
+                w : Int  -- Number of words in input
+                w =
+                    List.length <| String.words model.translated
+            in
+                ( model, Random.generate RandomIndex (Random.int 0 w))
 
         RandomIndex i ->
             ( { model
-                | translated = addUncertainty i translated
+                | translated = addUncertainty i model.translated
                 , errorMsg = ""
               }
             , Cmd.none )
