@@ -73,7 +73,8 @@ validString x =
     let
         setDiff : Set.Set Char  -- Set of Chars in input not in valid set
         setDiff =
-            Set.diff (Set.fromList <| String.toList <| String.toUpper x) validChars
+            validChars
+            |> Set.diff (Set.fromList <| String.toList <| String.toUpper x)
 
         badChars : String  -- Comma-separated String from Set of Chars
         badChars =
@@ -183,8 +184,8 @@ is inserted at the beginning or the end of the `String`.
 addUncertainty : Int -> String -> String
 addUncertainty i string =
     let
-        uncertainty : List String
-        uncertainty =
+        uncertain : List String
+        uncertain =
             [ "YANNO WHAT I MEAN" ]
 
         (leftSide, rightSide) = string  -- Breaks up string into two parts
@@ -201,31 +202,29 @@ addUncertainty i string =
             List.map (\(index, str) -> str) rightSide
     in
         String.join " "
-            <| List.concat [ leftString, uncertainty, rightString ]
+            <| List.concat [ leftString, uncertain, rightString ]
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         NewContent content ->
-            ( { model  -- Update the current state
-                | translated =
-                      case (meowthify content) of
-                          Ok x ->
-                              x  -- No error, output tranlated input
+            case (meowthify content) of
+                Ok x ->
+                    ( { model
+                        | translated = x
+                        , errorMsg = ""
+                      }
+                    , Cmd.none
+                    )
+                Err y ->
+                    ( { model
+                        | translated = ""
+                        , errorMsg = y
+                      }
+                    , Cmd.none
+                    )
 
-                          Err y ->
-                              "" -- Error found, but it goes to errorMsg
-                , errorMsg =
-                      case (meowthify content) of
-                          Ok x ->
-                              ""  -- No problems here
-
-                          Err y ->
-                              y  -- Something is wrong
-              }
-            , Cmd.none
-            )
 
         AddUncertainty ->
             let
