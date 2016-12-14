@@ -237,7 +237,7 @@ update msg model =
         RandomIndex i ->
             ( { model
                 | translated = addUncertainty i model.translated
-                , errorMsg = ""
+                , errorMsg = model.errorMsg
               }
             , Cmd.none )
 
